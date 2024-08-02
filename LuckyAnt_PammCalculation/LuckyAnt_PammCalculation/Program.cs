@@ -26,8 +26,12 @@ namespace LuckyAnt_PammFormula
         private static int delay_time = 500; // Delay for 0.5 seconds before checking again
         private static DateTime default_time = new(2024, 7, 20);
         
-        private static string db_name = "luckyant-pamm";
-        private static string conn = $"server = 68.183.177.155; uid = ctadmin; pwd = CTadmin!123; database = {db_name}; port = 3306;";
+        /* private static string db_name = "luckyant-pamm";
+        private static string conn = $"server = 68.183.177.155; uid = ctadmin; pwd = CTadmin!123; database = {db_name}; port = 3306;"; */
+
+        private static string db_name = "testdb";
+        //private static string conn = $"server = 68.183.177.155; uid = ctadmin; pwd = CTadmin!123; database = {db_name}; port = 3306;";
+        private static string conn = $"server = 43.246.174.85; uid = ctremote; pwd = p6eF1.OB1=C4; database = {db_name}; port = 25060;";
 
         // ----- 
         private static string serverName = "103.21.90.162";
@@ -38,8 +42,8 @@ namespace LuckyAnt_PammFormula
         private static long demo_mt5_account = 457282;
 
         // Switch 
-        private static bool paid_into_MT5Live_program = false;
-        private static bool paid_into_MT5Demo_program = true; // if not, live will not proceed
+        private static bool paid_into_MT5Live_program = true;
+        private static bool paid_into_MT5Demo_program = false; // if not, live will not proceed
         
         private static bool retrieve_pamm_trades_program = true;
         private static bool pamm_calculation_allocate_program = true;
@@ -94,7 +98,7 @@ namespace LuckyAnt_PammFormula
                     Console.WriteLine(" ------------------------------------------------------------------------------------------");
                     Console.WriteLine("Pamm Dividend Deposit In MT5 accounts program started...");
 
-                    //await PammDividend_Deposit_In(); //currentDate
+                    await PammDividend_Deposit_In(); //currentDate
 
                     taskStopwatch.Stop();
                     Console.WriteLine("");
@@ -153,10 +157,10 @@ namespace LuckyAnt_PammFormula
                         if(!reader.IsDBNull(1) && reader.GetInt64(1) > 0 && !reader.IsDBNull(3) && reader.GetInt64(3) > 0)
                         {
                             object[] PammData =  { reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),  reader.GetInt64(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6)};
-                            //if(!reader.IsDBNull(4) && reader.GetInt64(4) > 0)
-                            //{
+                            if(!reader.IsDBNull(4) && reader.GetInt64(4) > 0)
+                            {
                                 mt5_acc_List.Add(PammData);
-                            //}
+                            }
                             /* else
                             {
                                 no_mt5_acc_List.Add(PammData);
@@ -1463,6 +1467,7 @@ namespace LuckyAnt_PammFormula
                 }
             }
         }
+        
         /* private static async Task Telegram_Send(string messages)
         {
             //Console.WriteLine("Enter Telegram_Send - "+messages);
