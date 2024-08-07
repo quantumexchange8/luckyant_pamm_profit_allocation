@@ -1031,11 +1031,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Admin\\Documents\\0_System\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
+      "projectUniqueName": "C:\\Users\\Admin\\Documents\\GitHub\\LuckyAnt_Global\\luckyant_pamm_profit_allocation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
       "projectName": "LuckyAnt_PammCalculation",
-      "projectPath": "C:\\Users\\Admin\\Documents\\0_System\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
+      "projectPath": "C:\\Users\\Admin\\Documents\\GitHub\\LuckyAnt_Global\\luckyant_pamm_profit_allocation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
       "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Admin\\Documents\\0_System\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\obj\\",
+      "outputPath": "C:\\Users\\Admin\\Documents\\GitHub\\LuckyAnt_Global\\luckyant_pamm_profit_allocation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config"

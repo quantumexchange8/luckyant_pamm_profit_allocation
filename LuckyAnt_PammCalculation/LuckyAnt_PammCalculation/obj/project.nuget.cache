@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "M0b5caMDwk0Xkm9ka4MpRBG4ka/dxmk44jQOQ5Vi8MKEgxbXASzGRWT+V+qINMEBFBpXe/AKSgF7BSrddB5xxA==",
+  "dgSpecHash": "Qoy1fcO2u4noxEpc1XcEVzFJahrcuc7v9dkJUE/jU/uu6mhokUTSxJZ42CCMoLRifCA680bqOKn7n5QyfD7b2Q==",
   "success": true,
-  "projectFilePath": "C:\\Users\\Admin\\Documents\\0_System\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
+  "projectFilePath": "C:\\Users\\Admin\\Documents\\GitHub\\LuckyAnt_Global\\luckyant_pamm_profit_allocation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation\\LuckyAnt_PammCalculation.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Admin\\.nuget\\packages\\bouncycastle.netcore\\1.8.5\\bouncycastle.netcore.1.8.5.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\google.protobuf\\3.14.0\\google.protobuf.3.14.0.nupkg.sha512",

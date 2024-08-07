@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("LuckyAnt_PammCalculation")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a020d97f445fe211437f20dae32f7b24a4fae5cc")]
 [assembly: System.Reflection.AssemblyProductAttribute("LuckyAnt_PammCalculation")]
 [assembly: System.Reflection.AssemblyTitleAttribute("LuckyAnt_PammCalculation")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

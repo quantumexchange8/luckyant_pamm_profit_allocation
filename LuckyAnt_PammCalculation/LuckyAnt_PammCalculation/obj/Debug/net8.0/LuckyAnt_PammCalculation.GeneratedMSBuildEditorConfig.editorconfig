@@ -8,6 +8,6 @@ build_property.PlatformNeutralAssembly =
 build_property.EnforceExtendedAnalyzerRules = 
 build_property._SupportedPlatformList = Linux,macOS,Windows
 build_property.RootNamespace = LuckyAnt_PammCalculation
-build_property.ProjectDir = C:\Users\Admin\Documents\0_System\LuckyAnt_PammCalculation\LuckyAnt_PammCalculation\
+build_property.ProjectDir = C:\Users\Admin\Documents\GitHub\LuckyAnt_Global\luckyant_pamm_profit_allocation\LuckyAnt_PammCalculation\LuckyAnt_PammCalculation\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
