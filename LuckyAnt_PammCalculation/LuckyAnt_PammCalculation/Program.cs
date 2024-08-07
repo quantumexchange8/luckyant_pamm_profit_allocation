@@ -49,6 +49,7 @@ namespace LuckyAnt_PammFormula
         private static bool pamm_calculation_allocate_program = true;
         private static string fixed_nolot = "NOLOT";
         private static string fixed_nopamm = "NOPAMM";
+        private static string fixed_noMT5 = "NOMT5"; // if no mt5 account but need to pay -- might need to use in future
         //private static bool retrieve_copy_trades_program = false; // not 
         
         static async Task Main()
@@ -145,7 +146,7 @@ namespace LuckyAnt_PammFormula
             {
                 List<object[]> mt5_acc_List = new List<object[]>();
                 List<object[]> no_mt5_acc_List = new List<object[]>();
-                string sqlstr = "SELECT master_meta_login, ticket, symbol, user_id, meta_login, subscription_id, trade_profit  "+    
+                string sqlstr = "SELECT master_meta_login, ticket, symbol, user_id, meta_login, subscription_id, trade_profit, master_id, trade_swap  "+    
                                 "FROM trade_pamm_investor_allocate where deleted_at is null and pamm_allocate_status = 'Pending' ; ";
                 
                 Console.WriteLine($"MT5_PammDividend_Deposit_In - sqlstr: {sqlstr}");
@@ -156,10 +157,10 @@ namespace LuckyAnt_PammFormula
                     MySqlDataReader reader = select_cmd.ExecuteReader();
                     while (reader.Read())
                     {
-                        // 0-master login, 1- ticket, 2-symbol， 3-user_id, 4-meta login, 5-subscription_id, 6-trade_profit    
+                        // 0-master login, 1- ticket, 2-symbol， 3-user_id, 4-meta login, 5-subscription_id, 6-trade_profit, 7-master id, 8-trade_swap    
                         if(!reader.IsDBNull(1) && reader.GetInt64(1) > 0 && !reader.IsDBNull(3) && reader.GetInt64(3) > 0)
                         {
-                            object[] PammData =  { reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),  reader.GetInt64(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6)};
+                            object[] PammData =  { reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2),  reader.GetInt64(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6), reader.GetInt64(7), reader.GetDouble(8)};
                             if(!reader.IsDBNull(4) && reader.GetInt64(4) > 0)
                             {
                                 mt5_acc_List.Add(PammData);
@@ -194,43 +195,45 @@ namespace LuckyAnt_PammFormula
         private static void DividendPamm_PamInMT5(List<object[]> mt5_list)
         {
             Console.WriteLine("DividendPamm_PamInMT5 ... ");
-            foreach (var mt5 in mt5_list)
+            using (MySqlConnection sql_conn = new MySqlConnection(conn))
             {
-                // 0-master login, 1- ticket, 2-symbol，3-user_id, 4-meta login, 5-subscription_id, 6-trade_profit   
-                long master_metalogin = (long) mt5[0];
-                long master_ticket = (long) mt5[1];
-                string master_symbol = (string) mt5[2];
-                long subs_user_id = (long) mt5[3];
-                double subs_profit = (double) mt5[6];
-                subs_profit = Math.Round(subs_profit, 2);
+                sql_conn.Open(); // Open the connection
+                foreach (var mt5 in mt5_list)
+                {
+                    // 0-master login, 1- ticket, 2-symbol， 3-user_id, 4-meta login, 5-subscription_id, 6-trade_profit,7-master id       
+                    long master_metalogin = (long) mt5[0];
+                    long master_id = (long) mt5[7];
+                    long master_ticket = (long) mt5[1];
+                    string master_symbol = (string) mt5[2];
+                    long subs_user_id = (long) mt5[3];
+                    double subs_profit = ((double) mt5[6]) + ((double) mt5[8]);
+                    subs_profit = Math.Round(subs_profit, 2);
 
-                //if(mt5[4] != null && (long) mt5[4]  > 0) // have metalogin
-                
-                    long subs_metalogin = (mt5[4] != null) ? (long)mt5[4] : 0;
-                    if(paid_into_MT5Demo_program == true) {  subs_metalogin = demo_mt5_account;   }
-                    
-                    string remarks = $"from master #{master_ticket}, {master_symbol}";
-                    Console.WriteLine($"DividendPamm_PamInMT5 subs_metalogin: {subs_metalogin} -- remarks: {remarks} -- subs_profit: {subs_profit}");
-                    
-                    Console.WriteLine($"Select * FROM trade_pamm_investor_allocate where deleted_at is null and master_meta_login = {master_metalogin} and user_id = {subs_user_id} and ticket = {master_ticket};");
-                    MTRetCode balstatus = API_mManager.DealerBalance((ulong)subs_metalogin, subs_profit, (uint)CIMTDeal.EnDealAction.DEAL_BALANCE, remarks, out ulong deal_id);
-                    balstatus = MTRetCode.MT_RET_REQUEST_DONE;
-                    if (balstatus == MTRetCode.MT_RET_REQUEST_DONE)
+                    if(mt5[4] != null && (long) mt5[4]  > 0) // have metalogin
                     {
-                        subs_metalogin = (mt5[4] != null) ? (long)mt5[4] : 0;
-                        update_pamm_allocate( subs_metalogin , subs_user_id, master_ticket, master_symbol);
-                    } 
-                //}
+                        long subs_metalogin = (mt5[4] != null) ? (long)mt5[4] : 0;
+                        if(paid_into_MT5Demo_program == true) {  subs_metalogin = demo_mt5_account;   }
+                        
+                        string remarks = $"from master #{master_ticket}, {master_symbol}";
+                        Console.WriteLine($"DividendPamm_PamInMT5 subs_metalogin: {subs_metalogin} -- remarks: {remarks} -- subs_profit: {subs_profit}");
+                        Console.WriteLine($"Select * FROM trade_pamm_investor_allocate where deleted_at is null and master_meta_login = {master_metalogin} and user_id = {subs_user_id} and ticket = {master_ticket};");
+                        MTRetCode balstatus = API_mManager.DealerBalance((ulong)subs_metalogin, subs_profit, (uint)CIMTDeal.EnDealAction.DEAL_BALANCE, remarks, out ulong deal_id);
+                        balstatus = MTRetCode.MT_RET_REQUEST_DONE;
+                        if (balstatus == MTRetCode.MT_RET_REQUEST_DONE)
+                        {
+                            subs_metalogin = (mt5[4] != null) ? (long)mt5[4] : 0;
+                            update_pamm_allocate( subs_metalogin , subs_user_id, master_ticket, master_symbol, master_id, master_metalogin, subs_profit);
+                        } 
+                    }
+                    /* else if(subs_user_id > 0)
+                    {
 
-                //else
-               // {
-
-
-               // }
+                    } */
+                }
             }
         }
 
-        private static void update_pamm_allocate( long subs_metalogin, long subs_user_id, long pamm_ticket, string pamm_symbol )
+        private static void update_pamm_allocate( long subs_metalogin, long subs_user_id, long pamm_ticket, string pamm_symbol, long master_id, long master_metalogin, double subs_profit )
         {
             using (MySqlConnection sql_conn = new MySqlConnection(conn))
             {
@@ -242,7 +245,10 @@ namespace LuckyAnt_PammFormula
                 MySqlCommand update_cmd = new MySqlCommand(sqlstr, sql_conn);
                 update_cmd.ExecuteScalar();
 
-                Console.WriteLine($"ConnectionString: {sql_conn.ConnectionTimeout}");
+                sqlstr = $"UPDATE pamm_subscriptions_acc_info SET pamm_payout = coalesce(pamm_payout,0) + {subs_profit} WHERE deleted_at is null and user_id = {subs_user_id} and meta_login = {subs_metalogin} "+
+                         $"and master_id = {master_id} and master_meta_login = {master_metalogin} and id > 0; ";
+                MySqlCommand udpate_cmd1 = new MySqlCommand(sqlstr, sql_conn);
+                udpate_cmd1.ExecuteScalar();
             }
         } 
         
@@ -280,9 +286,9 @@ namespace LuckyAnt_PammFormula
             try
             {
                 List<object[]> pamm_List = new List<object[]>();
-                string sqlstr = "SELECT t1.meta_login, t2.id, t1.volume, t1.trade_profit, t1.trade_swap, t1.symbol, t1.ticket, t1.trade_type, t1.time_close, t1.price_close, coalesce(t2.project_based,''),  "+    
-                                "coalesce(t1.pamm_calculate_status,''), t1.time_open, t1.price_open FROM trade_pamm_masters_histories t1 INNER JOIN masters t2 ON t1.meta_login = t2.meta_login AND t1.deleted_at is null   "+
-                                "WHERE ((t2.status = 'Active') OR (project_based is not null and status = 'Inactive'))  AND t2.category = 'pamm' and t1.pamm_calculate_status = 'Pending' ORDER BY t1.id asc ;";
+                string sqlstr = "SELECT  t1.meta_login, t1.volume, t1.trade_profit, t1.trade_swap, t1.symbol, t1.ticket, t1.trade_type, t1.time_close, t1.price_close, coalesce(t1.pamm_calculate_status,''), t1.time_open, t1.price_open   "+    
+                                "FROM trade_pamm_masters_histories t1 WHERE t1.deleted_at is null   "+
+                                "and t1.meta_login in (select distinct meta_login from masters where ((status = 'Active') OR (project_based is not null and status = 'Inactive'))  AND category = 'pamm' ) and t1.pamm_calculate_status = 'Pending' ORDER BY t1.id asc ;";
                 
                 Console.WriteLine($"Allocate_Pamm_Calculation - sqlstr: {sqlstr}");
                 using (MySqlConnection sql_conn = new MySqlConnection(conn))
@@ -292,11 +298,11 @@ namespace LuckyAnt_PammFormula
                     MySqlDataReader reader = select_cmd.ExecuteReader();
                     while (reader.Read())
                     {
-                        // 0-master login, 1- master id, 2- master lot， 3-master pnl, 4-master swap, 5-symbol, 6-ticket, 7-trade_type, 8-close_time, 9-close_price, 10-project_based, 11-status, 12-open_time, 13-open_price
+                        // 0-master login, 1- master lot， 2-master pnl, 3-master swap, 4-symbol, 5-ticket, 6-trade_type, 7-close_time, 8-close_price,  9-status, 10-open_time, 11-open_price
                         if(!reader.IsDBNull(1) && reader.GetInt64(1) > 0)
                         {
-                            object[] PammData =  { reader.GetInt64(0), reader.GetInt64(1), reader.GetDouble(2), reader.GetDouble(3), reader.GetDouble(4), reader.GetString(5), reader.GetInt64(6), 
-                                                   reader.GetString(7), reader.GetDateTime(8), reader.GetDouble(9), reader.GetString(10), reader.GetString(11), reader.GetDateTime(12), reader.GetDouble(13)
+                            object[] PammData =  { reader.GetInt64(0),  reader.GetDouble(1), reader.GetDouble(2), reader.GetDouble(3), reader.GetString(4), reader.GetInt64(5), 
+                                                   reader.GetString(6), reader.GetDateTime(7), reader.GetDouble(8), reader.GetString(9), reader.GetDateTime(10), reader.GetDouble(11)
                                                  };
                             pamm_List.Add(PammData);
                         }
@@ -307,22 +313,22 @@ namespace LuckyAnt_PammFormula
                 long pamm_count = 1;
                 foreach (var pamm in pamm_List)
                 {
-                    long pamm_master_id = (long) pamm[1];
-                    if(pamm[1] != null && pamm_master_id > 0)
+                    long pamm_metalogin = (long) pamm[0];
+                    if(pamm[0] != null && pamm_metalogin > 0)
                     {
-                        long pamm_metalogin = (long) pamm[0];
-                        double pamm_lot = (double) pamm[2];
-                        double pamm_pnl = (double) pamm[3];
-                        double pamm_swap = (double) pamm[4];
-                        string pamm_symbol = (string) pamm[5];
-                        long pamm_ticket = (long) pamm[6];
-                        string pamm_trade_type = (string) pamm[7];
-                        DateTime pamm_close_time = (DateTime) pamm[8];
-                        double pamm_close_price = (double) pamm[9];
+                        long pamm_master_id = retrieve_master_id(pamm_metalogin);
+                        double pamm_lot = (double) pamm[1];
+                        double pamm_pnl = (double) pamm[2];
+                        double pamm_swap = (double) pamm[3];
+                        string pamm_symbol = (string) pamm[4];
+                        long pamm_ticket = (long) pamm[5];
+                        string pamm_trade_type = (string) pamm[6];
+                        DateTime pamm_close_time = (DateTime) pamm[7];
+                        double pamm_close_price = (double) pamm[8];
                         //string pamm_project_based = (string) pamm[10];
                         //string pamm_status = (string) pamm[11];
-                        DateTime pamm_open_time = (DateTime) pamm[12];
-                        double pamm_open_price = (double) pamm[13];
+                        DateTime pamm_open_time = (DateTime) pamm[10];
+                        double pamm_open_price = (double) pamm[11];
 
                         long pamm_user_id = 0; long pamm_rank = 0; long pamm_active = 0; 
                         retrieve_userid_based_metalogin(pamm_metalogin, ref pamm_user_id, ref pamm_rank, ref pamm_active);
@@ -332,7 +338,7 @@ namespace LuckyAnt_PammFormula
                         if(pamm_user_id > 0 && pamm_active > 0 )
                         {
                             insert_master_trades(pamm_user_id, pamm_master_id, pamm_metalogin, pamm_lot, pamm_pnl, pamm_swap, pamm_symbol, pamm_ticket, pamm_trade_type, pamm_close_time, pamm_close_price, pamm_open_time, pamm_open_price);
-                            insert_subscriber_allocation (pamm_user_id, pamm_master_id, pamm_metalogin, pamm_lot, pamm_pnl, pamm_swap, pamm_symbol, pamm_ticket, pamm_trade_type, pamm_close_time, pamm_close_price, pamm_open_time, pamm_open_price);
+                            insert_subscriber_allocation (pamm_user_id, pamm_metalogin, pamm_lot, pamm_pnl, pamm_swap, pamm_symbol, pamm_ticket, pamm_trade_type, pamm_close_time, pamm_close_price, pamm_open_time, pamm_open_price);
                             update_master_pamm_status(pamm_metalogin, pamm_ticket, pamm_symbol);
                         }
                         pamm_count = pamm_count+1;
@@ -361,7 +367,30 @@ namespace LuckyAnt_PammFormula
             }
         } 
 
-        private static double retrieve_summary_info(long pamm_master_id)
+        private static long retrieve_master_id(long pamm_master_login)
+        {
+            long master_id = 0; 
+            try
+            {
+                using (MySqlConnection sql_conn = new MySqlConnection(conn))
+                {
+                    sql_conn.Open(); // Open the connection  //count( distinct user_id), 
+                    string sqlstr = $"select id from masters where category = 'pamm' and (status = 'Active' or (status = 'Inactive' and project_based is not null))  " +
+                                    $"and meta_login = {pamm_master_login}  order by id asc limit 1; ";
+
+                    MySqlCommand select_cmd = new MySqlCommand(sqlstr, sql_conn);
+                    object result = select_cmd.ExecuteScalar();
+                    if (result != null) { master_id = Convert.ToInt64(result);  }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An exception occurred: {ex}");
+            }
+            return(master_id);
+        }
+
+        private static double retrieve_summary_info(long pamm_master_login)
         {
             double total_funds = 0; 
             try
@@ -371,7 +400,7 @@ namespace LuckyAnt_PammFormula
                     sql_conn.Open(); // Open the connection  //count( distinct user_id), 
                     string sqlstr = $"select sum(subscription_amount) from pamm_subscriptions where approval_date is not null " +
                                     $"and ((status = 'Active' and extra_conditions is not null) or (status = 'Active' and extra_conditions is null and deleted_at is null))  " +
-                                    $"and master_id = {pamm_master_id} group by master_id, master_meta_login ; ";
+                                    $"and master_meta_login = {pamm_master_login} group by master_meta_login ; ";
 
                     MySqlCommand select_cmd = new MySqlCommand(sqlstr, sql_conn);
                     object result = select_cmd.ExecuteScalar();
@@ -387,7 +416,7 @@ namespace LuckyAnt_PammFormula
             return(total_funds);
         }
 
-        private static List<object[]> retrieve_pamm_subscribers_tradehist_exist(long pamm_master_id, long pamm_master_ticket)
+        private static List<object[]> retrieve_pamm_subscribers_tradehist_exist(long master_meta_login, long pamm_master_ticket)
         {
             List<object[]> local_List = new List<object[]>(); 
             try
@@ -416,7 +445,7 @@ namespace LuckyAnt_PammFormula
             return(local_List);
         }
 
-        private static List<object[]> retrieve_pamm_subscribers_exist(long pamm_master_id, long pamm_master_ticket)
+        private static List<object[]> retrieve_pamm_subscribers_exist(long pamm_metalogin, long pamm_master_ticket)
         {
             List<object[]> local_List = new List<object[]>(); 
             try
@@ -424,7 +453,7 @@ namespace LuckyAnt_PammFormula
                 using (MySqlConnection sql_conn = new MySqlConnection(conn))
                 {
                     sql_conn.Open(); // Open the connection
-                    string sqlstr = $"select user_id, meta_login, ticket from trade_pamm_investor_allocate where master_id = {pamm_master_id} and ticket = {pamm_master_ticket}; ";
+                    string sqlstr = $"select user_id, meta_login, ticket from trade_pamm_investor_allocate where master_meta_login = {pamm_metalogin} and ticket = {pamm_master_ticket}; ";
                     Console.WriteLine($"retrieve_pamm_subscribers_exist -- sqlstr: {sqlstr} ");  
                     MySqlCommand select_cmd = new MySqlCommand(sqlstr, sql_conn);
                     using (MySqlDataReader reader = select_cmd.ExecuteReader())
@@ -444,7 +473,7 @@ namespace LuckyAnt_PammFormula
             return(local_List);
         }
         
-        private static List<object[]> retrieve_pamm_subscribers(long pamm_master_id,  long pamm_master_ticket)
+        private static List<object[]> retrieve_pamm_subscribers(long pamm_master_login,  long pamm_master_ticket)
         {
             List<object[]> local_List = new List<object[]>(); 
             try
@@ -452,9 +481,9 @@ namespace LuckyAnt_PammFormula
                 using (MySqlConnection sql_conn = new MySqlConnection(conn))
                 {
                     sql_conn.Open(); // Open the connection
-                    string sqlstr = $"select id, coalesce(user_id,0), subscription_amount, coalesce(meta_login,0), COALESCE(extra_conditions, '') from pamm_subscriptions  " +
+                    string sqlstr = $"select id, coalesce(user_id,0), subscription_amount, coalesce(meta_login,0), COALESCE(extra_conditions, ''), COALESCE(master_id, 0) from pamm_subscriptions  " +
                                     $"where approval_date is not null AND ((status = 'Active' AND extra_conditions IS NOT NULL) OR  " +
-                                    $"(status = 'Active' AND extra_conditions IS NULL AND deleted_at IS NULL))  and master_id = {pamm_master_id}; " ;  
+                                    $"(status = 'Active' AND extra_conditions IS NULL AND deleted_at IS NULL))  and master_meta_login = {pamm_master_login}; " ;  
                                     
                     Console.WriteLine($"retrieve_pamm_subscribers -- sqlstr: {sqlstr} ");  
                     MySqlCommand select_cmd = new MySqlCommand(sqlstr, sql_conn);
@@ -462,7 +491,7 @@ namespace LuckyAnt_PammFormula
                     {
                         while (reader.Read())
                         {
-                            object[] localData = { reader.GetInt64(0), reader.GetInt64(1), reader.GetDouble(2), reader.GetInt64(3), pamm_master_ticket, reader.GetString(4)};
+                            object[] localData = { reader.GetInt64(0), reader.GetInt64(1), reader.GetDouble(2), reader.GetInt64(3), pamm_master_ticket, reader.GetString(4), reader.GetInt64(5)};
                             local_List.Add(localData);
                         }
                     }
@@ -475,7 +504,7 @@ namespace LuckyAnt_PammFormula
             return(local_List);
         }
         
-        private static void insert_subscriber_allocation(long pamm_user_id, long pamm_master_id, long pamm_metalogin, double pamm_lot, double pamm_pnl, double pamm_swap, 
+        private static void insert_subscriber_allocation(long pamm_user_id,  long pamm_metalogin, double pamm_lot, double pamm_pnl, double pamm_swap, 
                                                          string pamm_symbol, long pamm_ticket, string pamm_trade_type, DateTime pamm_close_time, double pamm_close_price, DateTime pamm_open_time, double pamm_open_price)
         {
             try
@@ -484,69 +513,83 @@ namespace LuckyAnt_PammFormula
                 //Console.WriteLine($"");
                 List<string> subscriber_trades_List = new List<string>();
                 List<string> subscriber_trades_nopamm_List = new List<string>();
-                List<string> subscriber_tradehist_List = new List<string>();
+                
+                List<object[]> subscribers_nopamm_payoutList = new List<object[]>();
+
+                List<string> subscriber_tradehist_insertList = new List<string>();
                 List<string> subscriber_tradehist_nolot_List = new List<string>();
 
                 double pamm_profit = pamm_pnl+pamm_swap;
-                double subscriber_totalfunds = retrieve_summary_info(pamm_master_id);   // new List<object[]>();
+                double subscriber_totalfunds = retrieve_summary_info(pamm_metalogin);   // new List<object[]>();
                 Console.WriteLine($"insert_subscriber_allocation -- list - total funds: {subscriber_totalfunds}");
 
                 if(subscriber_totalfunds > 0)
                 {
-                    List<object[]> subscribers_List = retrieve_pamm_subscribers(pamm_master_id, pamm_ticket);
+                    List<object[]> subscribers_List = retrieve_pamm_subscribers(pamm_metalogin, pamm_ticket);
 
+                    // Group by 'UserId' and 'Login', then calculate the sum of 'Amount' and count of records
+                    var groupedTransactions = subscribers_List.GroupBy(x => new { UserId = (long)x[1], Login = (long)x[3] })
+                        .Select(g => new
+                        {
+                            //SubsId =  g.Count() == 1 ? (long?)long.Parse((string)g.First()[0]) : (long) 0,
+                            g.Key.UserId, g.Key.Login,
+                            SubsId = g.Select(x => (long)x[0]).FirstOrDefault(),
+                            TotalAmount = g.Sum(x => (double)x[2]),
+                            RecordCount = g.Count(),
+                            Ticket = pamm_ticket,
+                            Category = g.Select(x => (string)x[5]).FirstOrDefault(), // Assuming category is same across the group
+                            MasterID = g.Select(x => (long)x[6]).FirstOrDefault()
+                        });
+                    
+                    // Convert back to List<object[]>, including the ID if count == 1
+                    subscribers_List = groupedTransactions.Select(g => new object[]
+                    {
+                        g.SubsId, g.UserId,g.TotalAmount,g.Login,g.Ticket,g.Category,g.MasterID,g.RecordCount
+                    }).ToList();
+
+                    UpdatePammSubsAccInfo(subscribers_List, pamm_metalogin);
+                    
                     List<object[]> subscribers_tradehist_List = subscribers_List;
 
-                    List<object[]> subscribers_exist_List = retrieve_pamm_subscribers_exist(pamm_master_id, pamm_ticket);
-                    List<object[]> subscribers_tradehist_exist_List = retrieve_pamm_subscribers_tradehist_exist(pamm_master_id, pamm_ticket); //retrieve_pamm_subscribers_exist(pamm_master_id, pamm_ticket);
-                    //Console.WriteLine($"");
-                    //Console.WriteLine($"subscribers_List.Count: {subscribers_List.Count} - subscribers_exist_List.Count: {subscribers_exist_List.Count}");
-                    //Console.WriteLine($"subscribers_tradehist_List.Count: {subscribers_List.Count} - subscribers_tradehist_exist_List.Count: {subscribers_exist_List.Count}");
+                    List<object[]> subscribers_exist_List = retrieve_pamm_subscribers_exist(pamm_metalogin, pamm_ticket);
+                    List<object[]> subscribers_tradehist_exist_List = retrieve_pamm_subscribers_tradehist_exist(pamm_metalogin, pamm_ticket); //retrieve_pamm_subscribers_exist(pamm_master_id, pamm_ticket);
+                    
+                    Console.WriteLine($"");
+                    Console.WriteLine($"subscribers_List.Count: {subscribers_List.Count} - subscribers_exist_List.Count: {subscribers_exist_List.Count}");
+                    Console.WriteLine($"subscribers_tradehist_List.Count: {subscribers_List.Count} - subscribers_tradehist_exist_List.Count: {subscribers_exist_List.Count}");
                     
                     subscribers_List = RemoveRecordsWithTickets(subscribers_List, subscribers_exist_List);
-
-                    /* var projectDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                    var csvFilePath = Path.Combine(projectDirectory, "subscriber_trades.csv");
-                    using (var writer = new StreamWriter(csvFilePath))
+                    foreach (var subscribers in subscribers_List)
                     {
-                        writer.WriteLine("----------------------");
-                        writer.WriteLine($"Master id = {pamm_master_id} - {pamm_metalogin} - subscribers_List.Count: {subscribers_List.Count} - total funds: {subscriber_totalfunds}");
-                        writer.WriteLine("----------------------"); */
-
-                        foreach (var subscribers in subscribers_List)
-                        {
-                            long subscriber_subs_id = (long) subscribers[0]; 
-                            long subscriber_user_id = (long) subscribers[1]; 
-                            double subscriber_funds = (double) subscribers[2]; 
-                            long subscriber_meta_login = (long)  subscribers[3] != null ? (long)subscribers[3] : 0;
-                            string subscriber_extra_conditions = (string) subscribers[5];
+                        long subscriber_subs_id = (long) subscribers[0]; 
+                        long subscriber_user_id = (long) subscribers[1]; 
+                        double subscriber_funds = (double) subscribers[2]; 
+                        long subscriber_meta_login = (long)  subscribers[3] != null ? (long)subscribers[3] : 0;
+                        string subscriber_extra_conditions = (string) subscribers[5];
+                        long subscriber_master_id = (long) subscribers[6]; 
                             
-                            double subscriber_pct = (double) (subscriber_funds / subscriber_totalfunds);
-                            double subscriber_pct_db = (double) subscriber_pct * 100;
-                            double allocate_volume = (double) pamm_lot * subscriber_pct;
-                            double allocate_profit = (double) pamm_pnl * subscriber_pct;
-                            double allocate_swap = (double) pamm_swap * subscriber_pct;
+                        double subscriber_pct = (double) (subscriber_funds / subscriber_totalfunds);
+                        double subscriber_pct_db = (double) subscriber_pct * 100;
+                        double allocate_volume = (double) pamm_lot * subscriber_pct;
+                        double allocate_profit = (double) pamm_pnl * subscriber_pct;
+                        double allocate_swap = (double) pamm_swap * subscriber_pct;
+                        //Console.WriteLine($"list - user: {subscriber_user_id}, subs:{subscriber_subs_id}, fund:{subscriber_funds} ");
+                        if (subscriber_extra_conditions.Contains(fixed_nopamm) && subscriber_funds > 0)
+                        {
+                            subscriber_trades_nopamm_List.Add($"( {subscriber_master_id}, {pamm_metalogin}, {pamm_lot}, Round({(pamm_pnl)},4), Round({(pamm_swap)},4), ROUND({subscriber_totalfunds},2), {subscriber_user_id}, {subscriber_meta_login}, {subscriber_subs_id}, "+
+                            $" ROUND({subscriber_funds},2), ROUND({subscriber_pct_db},5), {pamm_ticket}, '{pamm_symbol}', '{pamm_trade_type}', ROUND({allocate_volume},5), '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, " +
+                            $" ROUND({allocate_profit},5), ROUND({allocate_swap},5), 'Void', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_open_price})");
 
-                            //Console.WriteLine($"list - user: {subscriber_user_id}, subs:{subscriber_subs_id}, fund:{subscriber_funds} ");
-                            //writer.WriteLine($"list - user: {subscriber_user_id}, subs:{subscriber_subs_id}, fund:{subscriber_funds}");
-
-                            if (subscriber_extra_conditions.Contains(fixed_nopamm))
-                            {
-                                subscriber_trades_nopamm_List.Add($"( {pamm_master_id}, {pamm_metalogin}, {pamm_lot}, Round({(pamm_pnl)},4), Round({(pamm_swap)},4), ROUND({subscriber_totalfunds},2), {subscriber_user_id}, {subscriber_meta_login}, {subscriber_subs_id}, "+
-                                $" ROUND({subscriber_funds},2), ROUND({subscriber_pct_db},5), {pamm_ticket}, '{pamm_symbol}', '{pamm_trade_type}', ROUND({allocate_volume},5), '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, " +
-                                $" ROUND({allocate_profit},5), ROUND({allocate_swap},5), 'Void', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_open_price})");
-                            }else
-                            {
-                                subscriber_trades_List.Add($"( {pamm_master_id}, {pamm_metalogin}, {pamm_lot}, Round({(pamm_pnl)},4), Round({(pamm_swap)},4), ROUND({subscriber_totalfunds},2), {subscriber_user_id}, {subscriber_meta_login}, {subscriber_subs_id}, "+
-                                $" ROUND({subscriber_funds},2), ROUND({subscriber_pct_db},5), {pamm_ticket}, '{pamm_symbol}', '{pamm_trade_type}', ROUND({allocate_volume},5), '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, " +
-                                $" ROUND({allocate_profit},5), ROUND({allocate_swap},5), '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_open_price})");
-                            }
-                            /* writer.WriteLine( $"( {pamm_master_id}, {pamm_metalogin}, {pamm_lot}, Round({(pamm_pnl)},4), Round({(pamm_swap)},4), ROUND({subscriber_totalfunds},2), {subscriber_user_id}, {subscriber_meta_login}, {subscriber_subs_id}, "+
-                                $" ROUND({subscriber_funds},2), ROUND({subscriber_pct_db},5), {pamm_ticket}, '{pamm_symbol}', '{pamm_trade_type}', ROUND({allocate_volume},5), '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}," +
-                                $" ROUND({allocate_profit},5), ROUND({allocate_swap},5), '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_open_price})"
-                            ); */
+                            object[] localData = { subscriber_user_id, subscriber_meta_login, subscriber_master_id, pamm_metalogin, Math.Round(allocate_profit,5), Math.Round(allocate_swap,5) };
+                            subscribers_nopamm_payoutList.Add(localData);
                         }
-                    //}
+                        else if( subscriber_funds > 0)
+                        {
+                            subscriber_trades_List.Add($"( {subscriber_master_id}, {pamm_metalogin}, {pamm_lot}, Round({(pamm_pnl)},4), Round({(pamm_swap)},4), ROUND({subscriber_totalfunds},2), {subscriber_user_id}, {subscriber_meta_login}, {subscriber_subs_id}, "+
+                            $" ROUND({subscriber_funds},2), ROUND({subscriber_pct_db},5), {pamm_ticket}, '{pamm_symbol}', '{pamm_trade_type}', ROUND({allocate_volume},5), '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, " +
+                            $" ROUND({allocate_profit},5), ROUND({allocate_swap},5), '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_open_price})");
+                        } 
+                    }
 
                     if(subscriber_trades_nopamm_List.Count > 0 )
                     {
@@ -557,7 +600,7 @@ namespace LuckyAnt_PammFormula
                                      $"subscription_funds, subs_pamm_percent, ticket, symbol, trade_type, volume, time_close, price_close, trade_profit, trade_swap, pamm_allocate_status, created_at, time_open, price_open) "+
                                      $" VALUES " + string.Join(", ", subscriber_trades_nopamm_List)+
                                      " ;";
-                            Console.WriteLine($"subscriber_trades_nopamm_List sqlstr: {sqlstr}");
+                            //Console.WriteLine($"subscriber_trades_nopamm_List sqlstr: {sqlstr}");
                             MySqlCommand insert_cmd = new MySqlCommand(sqlstr, sql_conn);
                             insert_cmd.ExecuteScalar();
                         }
@@ -571,12 +614,28 @@ namespace LuckyAnt_PammFormula
                                      $"subscription_funds, subs_pamm_percent, ticket, symbol, trade_type, volume, time_close, price_close, trade_profit, trade_swap, created_at, time_open, price_open) "+
                                      $" VALUES " + string.Join(", ", subscriber_trades_List)+
                                      " ;";
-                            Console.WriteLine($"subscriber_trades_List sqlstr: {sqlstr}");
+                            //Console.WriteLine($"subscriber_trades_List sqlstr: {sqlstr}");
                             MySqlCommand insert_cmd = new MySqlCommand(sqlstr, sql_conn);
                             insert_cmd.ExecuteScalar();
                         }
                     }
-                
+                    if(subscribers_nopamm_payoutList.Count > 0 )
+                    {
+                        using (MySqlConnection sql_conn = new MySqlConnection(conn))
+                        {
+                            sql_conn.Open();
+                            
+                            foreach(var record_nopamm in subscribers_nopamm_payoutList)
+                            {
+                                double pnl = Convert.ToDouble(record_nopamm[4]) + Convert.ToDouble(record_nopamm[5]);
+                                string sqlstr = $"UPDATE pamm_subscriptions_acc_info SET pamm_payout = coalesce(pamm_payout,0) + ROUND({pnl},5) WHERE deleted_at is null and user_id = {record_nopamm[0]} and meta_login = {record_nopamm[1]} "+
+                                $"and master_id = {record_nopamm[2]} and master_meta_login = {record_nopamm[3]} and id > 0; ";
+                                MySqlCommand udpate_cmd = new MySqlCommand(sqlstr, sql_conn);
+                                udpate_cmd.ExecuteScalar();
+                            }
+                        }
+                    }
+
                     // ---------------------------------------------------------------------------------------------------------------------------------------------
                     // ---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -586,9 +645,10 @@ namespace LuckyAnt_PammFormula
                     {
                         long subscriber_user_id = (long) subscribers_tradehist[1]; 
                         long subscriber_meta_login = (long)  subscribers_tradehist[3] != null ? (long)subscribers_tradehist[3] : 0;
-          
+
                         long subscriber_subs_id = (long) subscribers_tradehist[0]; 
                         double subscriber_funds = (double) subscribers_tradehist[2];     
+                        long subscriber_master_id = (long) subscribers_tradehist[6]; 
                         //Console.WriteLine($"subscribers_tradehist[4]: {subscribers_tradehist[5]}");
                         string subscriber_extra_conditions = (string) subscribers_tradehist[5];
 
@@ -597,32 +657,37 @@ namespace LuckyAnt_PammFormula
                         double allocate_volume = (double) pamm_lot * subscriber_pct;
                         double allocate_profit = (double) pamm_profit * subscriber_pct;
 
-                        Console.WriteLine($"list - user: {subscriber_user_id}, subs:{subscriber_subs_id}, fund:{subscriber_funds} ");
-
-                        if (subscriber_extra_conditions.Contains(fixed_nolot))
+                        //Console.WriteLine($"list - user: {subscriber_user_id}, subs:{subscriber_subs_id}, fund:{subscriber_funds} ");
+                        
+                        if (subscriber_extra_conditions.Contains(fixed_nolot) && subscriber_extra_conditions.Contains(fixed_nopamm))
                         {
-                            subscriber_tradehist_List.Add($"( {subscriber_subs_id}, {subscriber_user_id}, {subscriber_meta_login}, '{pamm_symbol}', {pamm_ticket}, '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_trade_type}', ROUND({allocate_volume},5), " +
-                            $" {pamm_open_price}, '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, 'Closed', ROUND({allocate_profit},5), 'Void', {pamm_master_id}, 'pamm', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}')");
-                        }else
+                            // do nothing 
+                        }
+                        else if (subscriber_extra_conditions.Contains(fixed_nolot) && subscriber_funds > 0)
                         {
-                            subscriber_tradehist_List.Add($"( {subscriber_subs_id}, {subscriber_user_id}, {subscriber_meta_login}, '{pamm_symbol}', {pamm_ticket}, '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_trade_type}', ROUND({allocate_volume},5), " +
-                            $" {pamm_open_price}, '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, 'Closed', ROUND({allocate_profit},5), 'Pending', {pamm_master_id}, 'pamm', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}')");
+                            subscriber_tradehist_insertList.Add($"( {subscriber_subs_id}, {subscriber_user_id}, {subscriber_meta_login}, '{pamm_symbol}', {pamm_ticket}, '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_trade_type}', ROUND({allocate_volume},5), " +
+                            $" {pamm_open_price}, '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, 'Closed', ROUND({allocate_profit},5), 'Void', {subscriber_master_id}, 'pamm', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}')");
+                        }
+                        else if( subscriber_funds > 0)
+                        {
+                            subscriber_tradehist_insertList.Add($"( {subscriber_subs_id}, {subscriber_user_id}, {subscriber_meta_login}, '{pamm_symbol}', {pamm_ticket}, '{pamm_open_time.ToString("yyyy-MM-dd HH:mm:ss")}', '{pamm_trade_type}', ROUND({allocate_volume},5), " +
+                            $" {pamm_open_price}, '{pamm_close_time.ToString("yyyy-MM-dd HH:mm:ss")}', {pamm_close_price}, 'Closed', ROUND({allocate_profit},5), 'Pending', {subscriber_master_id}, 'pamm', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}')");
                         }
                     }
 
-                    if(subscribers_tradehist_List.Count > 0)
+                    if(subscriber_tradehist_insertList.Count > 0)
                     {
                         using (MySqlConnection sql_conn = new MySqlConnection(conn))
                         {
                             sql_conn.Open();
                             string sqlstr = $"INSERT INTO trade_histories (subscription_id, user_id, meta_login, symbol, ticket, time_open, trade_type, volume, price_open, time_close, price_close, trade_status, trade_profit, rebate_status, master_id, master_acc_type, created_at) "+
-                                     $" VALUES " + string.Join(", ", subscriber_tradehist_List)+
+                                     $" VALUES " + string.Join(", ", subscriber_tradehist_insertList)+
                                      " ;";
                             Console.WriteLine($"subscribers_tradehist_List sqlstr: {sqlstr}");
                             MySqlCommand insert_cmd = new MySqlCommand(sqlstr, sql_conn);
                             insert_cmd.ExecuteScalar();
                         }
-                    } 
+                    }  
                 }
             }
             catch (Exception ex)
@@ -633,12 +698,69 @@ namespace LuckyAnt_PammFormula
             //}
         }
 
+        private static void UpdatePammSubsAccInfo(List<object[]> records_list, long pamm_metalogin)
+        {
+            // Convert each object[] to a string and join them into a single string
+           /*  Console.WriteLine("UpdatePammSubsAccInfo -- list ");
+            string resultString = string.Join(", ", records_list.Select(objArray => string.Join(", ", objArray.Select(obj => obj?.ToString() ?? "null"))));
+            // Output the result
+            Console.WriteLine(resultString);
+            Console.WriteLine(" "); */
+
+            // Display the results
+            using (MySqlConnection sql_conn = new MySqlConnection(conn))
+            {
+                sql_conn.Open(); // Open the connection
+                foreach (var record in records_list)
+                {
+                    long count = 0; double nett_subs_amount = 0;
+                    string sqlstr = $"select nett_subs_amount from pamm_subscriptions_acc_info where deleted_at is null and user_id = {record[1]} and meta_login = {record[3]} "+
+                                $"and master_id = {record[6]} and master_meta_login = {pamm_metalogin} ; ";
+
+                    Console.WriteLine($"UpdatePammSubsAccInfo sqlstr: {sqlstr}");
+                    MySqlCommand select_cmd = new MySqlCommand(sqlstr, sql_conn);
+                    object result = select_cmd.ExecuteScalar();
+                    if (result != null) { nett_subs_amount = Convert.ToDouble(result);  count++; }
+
+                    if(count == 0)
+                    {
+                        sqlstr = $"INSERT INTO pamm_subscriptions_acc_info (user_id, meta_login, nett_subs_amount, master_id, master_meta_login, status, created_at) "+
+                                 $" VALUES ({record[1]}, {record[3]}, {record[2]}, {record[6]}, {pamm_metalogin}, 'Active', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}')"+
+                                     " ;";
+                        //Console.WriteLine($"pamm_subscriptions_acc_info sqlstr: {sqlstr}");
+                        MySqlCommand insert_cmd = new MySqlCommand(sqlstr, sql_conn);
+                        insert_cmd.ExecuteScalar();
+                    }else
+                    {
+                        double current_amt = (double) record[2];
+                        if(nett_subs_amount <= 0 && current_amt != nett_subs_amount)
+                        {
+                            sqlstr = $"UPDATE pamm_subscriptions_acc_info SET nett_subs_amount =  {current_amt}, status = 'Inactive' WHERE deleted_at is null and user_id = {record[1]} and meta_login = {record[3]} "+
+                            $"and master_id = {record[6]} and master_meta_login = {pamm_metalogin} and id > 0; ";
+
+                            MySqlCommand udpate_cmd = new MySqlCommand(sqlstr, sql_conn);
+                            udpate_cmd.ExecuteScalar();
+                        }
+                        else if(current_amt != nett_subs_amount && current_amt > 0 )
+                        {
+                            sqlstr = $"UPDATE pamm_subscriptions_acc_info SET nett_subs_amount =  {current_amt}, status = 'Active' WHERE deleted_at is null and user_id = {record[1]} and meta_login = {record[3]} "+
+                            $"and master_id = {record[6]} and master_meta_login = {pamm_metalogin} and id > 0; ";
+
+                            MySqlCommand udpate_cmd = new MySqlCommand(sqlstr, sql_conn);
+                            udpate_cmd.ExecuteScalar();
+                        }
+                    }
+                    //Console.WriteLine($"Id: {objArray[0]}, UserId: {objArray[1]}, TotalAmount: {objArray[2]}, Login: {objArray[3]},  Ticket: {objArray[3]}, Category: {objArray[4]}, RecordCount: {objArray[5]}");
+                }
+            }
+        }
+
         public static List<object[]> RemoveRecordsWithTickets(List<object[]> records, List<object[]> ticketsToRemove)
         {   
             //records -- id (0), user_id (1), subscription_amount(2), coalesce(meta_login,0) (3),ticket(4)
             //ticketsToRemove -- user_id, meta_login, ticket
                                                                     // ticket                       // user_id                           // meta_login
-            return records.Where(record => !ticketsToRemove.Any(t => (long)t[2] == (long)record[4] && ((long)t[0] == (long)record[1] || (long)t[1] == (long)record[3]))).ToList();
+            return records.Where(record => !ticketsToRemove.Any(t => (long)t[2] == (long)record[4] && ((long)t[0] == (long)record[1] && (long)t[1] == (long)record[3]))).ToList();
         }
         
         private static void insert_master_trades(long pamm_user_id, long pamm_master_id, long pamm_metalogin, double pamm_lot, double pamm_pnl, double pamm_swap, 
@@ -802,10 +924,23 @@ namespace LuckyAnt_PammFormula
                     List<object[]> open_tradesList = PammAcc_tradesList.Where(arr => (ulong)arr[3] == (ulong)arr[8] && (double)arr[9] == 0) // Filter where column 3 is not equal to column 8
                                                      .OrderBy(arr => (DateTime)arr[4])           // Sort by the date in column 5
                                                      .ToList();
+                    
+                    var projectDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                    var csvFilePath1 = Path.Combine(projectDirectory, "Open_Deals.csv");
+                    using (var writer = new StreamWriter(csvFilePath1))
+                    {
+                        foreach (var item in open_tradesList)
+                        {
+                            var line = string.Join(",", item);
+                            writer.WriteLine(line);
+                        }
+                    }
+                    Console.WriteLine($"List saved to CSV file at {csvFilePath1}"); 
+
                     List<object[]> open_trade_exist_List = retrieve_open_trade_exist(last_date);
                     CompareTrades(open_tradesList, open_trade_exist_List, 1, out List<object[]> insert_openList, out List<object[]> update_openList);
                     insert_updateMT5_into_mastershist(insert_openList, update_openList, 1);
-
+                    
                     Console.WriteLine($"insert_openList: {insert_openList.Count} - update_openList: {update_openList.Count}");
                     
 
@@ -813,6 +948,18 @@ namespace LuckyAnt_PammFormula
                     List<object[]> close_tradesList = PammAcc_tradesList.Where(arr => (ulong)arr[3] != (ulong)arr[8] && (double)arr[9] > 0) // Filter where column 3 is not equal to column 8
                                                       .OrderBy(arr => (DateTime)arr[4])           // Sort by the date in column 5
                                                       .ToList();
+
+                    /* var csvFilePath2 = Path.Combine(projectDirectory, "Close_Deals.csv");
+                    using (var writer = new StreamWriter(csvFilePath2))
+                    {
+                        foreach (var item in close_tradesList)
+                        {
+                            var line = string.Join(",", item);
+                            writer.WriteLine(line);
+                        }
+                    }
+                    Console.WriteLine($"List saved to CSV file at {csvFilePath2}"); */
+
                     List<object[]> close_trade_exist_List = retrieve_close_trade_exist(last_date);
                     CompareTrades(close_tradesList, close_trade_exist_List, 2, out List<object[]> insertList, out List<object[]> update_closeList);
 
@@ -849,6 +996,8 @@ namespace LuckyAnt_PammFormula
                                         $"VALUES ({insert[0]}, '{insert[2]}', {insert[8]}, '{t_type}', {insert[6]},  '{((DateTime)insert[4]).ToString("yyyy-MM-dd HH:mm:ss")}', {insert[7]}, " +
                                         $"'Unclosed', '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}');";
 
+                        Console.WriteLine($"Opening insert : {sqlstr}");
+                        
                         MySqlCommand insert_cmd = new MySqlCommand(sqlstr, sql_conn);
                         insert_cmd.ExecuteScalar();
                         Console.WriteLine($"Opening insert Ticket:{insert[8]}- count: {count}/ {insertlist.Count}");
@@ -884,7 +1033,7 @@ namespace LuckyAnt_PammFormula
                         foreach (var update in updatelist)
                         {
                             string upd_sqlstr = $"UPDATE trade_pamm_masters_histories SET time_close = '{((DateTime)update[4]).ToString("yyyy-MM-dd HH:mm:ss")}', " +
-                                                $"price_close = {update[9]}, pamm_calculate_status = CASE WHEN (pamm_calculate_status IS NULL or pamm_calculate_status = 'Unclosed') THEN 'Pending' END, " +
+                                                $"price_close = {update[7]}, pamm_calculate_status = CASE WHEN (pamm_calculate_status IS NULL or pamm_calculate_status = 'Unclosed') THEN 'Pending' ELSE pamm_calculate_status END, " +
                                                 $"trade_profit = {update[10]}, trade_swap = {update[11]}, updated_at = '{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}' " +
                                                 $"WHERE deleted_at is null and ticket = {update[8]} and id > 0";
                             Console.WriteLine($"upd_sqlstr: {upd_sqlstr}");
@@ -914,7 +1063,6 @@ namespace LuckyAnt_PammFormula
             foreach (var trade in trade_List)
             {
                 string ticket = trade[8].ToString();
-                //Console.WriteLine($"ticket: {ticket} - existingTradesDict[ticket]: {existingTradesDict[ticket][2]} - {!existingTradesDict.ContainsKey(ticket)}");
                 if (!existingTradesDict.ContainsKey(ticket))
                 {
                     // If the ticket does not exist, add to insert list
@@ -948,7 +1096,7 @@ namespace LuckyAnt_PammFormula
                             !trade[4].Equals(existingTrade[3]) || // dt_Timestamp vs time_close
                                                                   //!trade[5].Equals(existingTrade[4]) || // Action vs trade_type
                                                                   //!trade[6].Equals(existingTrade[5]) || // volume vs volume
-                            !trade[9].Equals(existingTrade[4]) || // Price vs price_close
+                            !trade[7].Equals(existingTrade[4]) || // Price vs price_close
                                                                   //!("Closed").Equals(existingTrade[5]) ||
                             !trade[10].Equals(existingTrade[5]) || // Profit vs Swap (adjust if needed)
                             !trade[11].Equals(existingTrade[6]) ||  // Swap vs Profit (adjust if needed)
@@ -1011,7 +1159,7 @@ namespace LuckyAnt_PammFormula
                 using (MySqlConnection sql_conn = new MySqlConnection(conn))
                 {
                     sql_conn.Open(); // Open the connection
-                    string sqlstr = $"SELECT DISTINCT meta_login, symbol, ticket, CASE WHEN UPPER(trade_type) = 'BUY' THEN 0  WHEN UPPER(trade_type) = 'SELL' THEN 1  END AS trade_type_numeric, coalesce(volume,0), coalesce(time_open,'2020-01-01'), "+
+                    string sqlstr = $"SELECT DISTINCT meta_login, symbol, ticket, CASE WHEN UPPER(trade_type) = 'BUY' THEN 0  WHEN UPPER(trade_type) = 'SELL' THEN 1 ELSE trade_type END AS trade_type_numeric, coalesce(volume,0), coalesce(time_open,'2020-01-01'), "+
                                     $"coalesce(price_open,0)  from trade_pamm_masters_histories " +
                                     $"where deleted_at is null and coalesce(time_open, '{last_date.ToString("yyyy-MM-dd HH:mm:ss")}') >= DATE_SUB('{last_date.ToString("yyyy-MM-dd HH:mm:ss")}', INTERVAL 30 DAY); ";
 
@@ -1056,7 +1204,7 @@ namespace LuckyAnt_PammFormula
             //login_List.Add(457284);
             string sqlstr = "SELECT meta_login FROM trading_accounts where deleted_at is null and user_id in ( SELECT id FROM users WHERE deleted_at is null and status = 'Active' ) and (" +
                             "meta_login not in (SELECT distinct meta_login FROM subscriptions where deleted_at is null and approval_date is not null and status = 'Active') " +
-                            "or meta_login in (select distinct meta_login from masters where deleted_at is null and category  in ('pamm') and (status = 'Active' or (status = 'Inactive' and project_based = 'CH'))));";
+                            "or meta_login in (select distinct meta_login from masters where category  in ('pamm') and (status = 'Active' or (status = 'Inactive' and project_based is not null))));";
 
             Console.WriteLine($"get_trading_accounts sqlstr: {sqlstr}");
 
@@ -1079,7 +1227,7 @@ namespace LuckyAnt_PammFormula
         {
             List<ulong> login_List = new List<ulong>();
             //login_List.Add(457284);
-            string sqlstr = "SELECT meta_login FROM masters where deleted_at is null and category = 'pamm' and (status = 'Active' or (status = 'Inactive' and project_based = 'CH')) and user_id in ( " +
+            string sqlstr = "SELECT distinct meta_login FROM masters where category = 'pamm' and (status = 'Active' or (status = 'Inactive' and project_based is not null)) and user_id in ( " +
                             "SELECT id FROM users WHERE deleted_at is null and status = 'Active' ) ;";
 
             Console.WriteLine($"insert_cmd sqlstr: {sqlstr}");
